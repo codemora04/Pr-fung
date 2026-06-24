@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accueil - Système d'Audit</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="logo3.png">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <script src="./pwa.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <div class="container">
+    <div class="user-box" id="statusContainer">
+      <div id="loadingState">
+        <div class="spinner" style="margin: 0 auto 15px;"></div>
+        <p style="margin:0; font-weight: 600; text-align: center; color: var(--text-main);">Vérification de vos autorisations...</p>
+      </div>
+      <p id="errorMessage" class="error" style="display:none; text-align: center; margin: 0;"></p>
+      <p id="successMessage" class="success" style="display:none; text-align: center; margin: 0;"></p>
+      <div id="unauthorizedState" style="display:none; text-align:center;">
+        <div style="font-size:2.5rem; margin-bottom:12px;">🚫</div>
+        <p style="font-weight:700; font-size:1rem; color:var(--text-main); margin:0 0 6px;">Accès non autorisé</p>
+        <p style="color:#64748b; font-size:0.85rem; margin:0 0 20px;">Vous n'avez pas les droits nécessaires pour accéder à la section Audit.</p>
+        <a href="landing.html" class="btn-retour" style="display:inline-block; text-decoration:none;">← Retour à l'accueil</a>
+      </div>
+    </div>
+    <div class="logos" id="logosSection" style="display:none;">
+      <button class="logo-btn" id="baltimarBtn" disabled title="Audit Baltimar">
+        <img src="logo1.png" width="150" alt="Baltimar">
+      </button>
+      <button class="logo-btn" id="reveyBtn" disabled title="Audit Revey">
+        <img src="logo2.png" width="150" alt="Revey">
+      </button>
+    </div>
+    <div id="extraButtons" style="display:none; flex-direction: column; align-items: center; gap: 20px; margin-top: 20px;">
+      <button id="statsBtn" class="btn-retour btn-wide">
+        📊 Visualisation des Graphiques
+      </button>
+      <button id="historiqueBtn" class="btn-retour btn-wide">
+        📁 Historique des rapports d'audit
+      </button>
+      <button id="rapportBtn" class="btn-retour btn-wide">
+        📄 Gestion des Non-conformités
+      </button>
+      <button id="actionsChartBtn" class="btn-retour btn-wide">
+        📊 Actions par responsable
+      </button>
+      <button id="correctiveActionsBtn" class="btn-retour btn-wide" style="background:linear-gradient(135deg,#10b981,#10b981);box-shadow:0 4px 14px rgba(59,130,246,0.35);">
+        📋 Actions Correctives
+      </button>
+    </div>
+    <!-- NC Management Section -->
+    <div id="ncManagementSection" style="display:none; margin-top:20px; width:100%;">
+      <div style="background:var(--surface-color); border-radius:var(--radius-lg); border:1px solid var(--surface-border); overflow:hidden;">
+        <div style="padding:14px 20px; border-bottom:1px solid var(--surface-border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <h3 style="margin:0; color:var(--text-main); font-size:1rem;">⚠️ Non-conformités</h3>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="generateNcPdfBtn" class="btn-retour" style="font-size:0.82rem; padding:6px 14px; margin:0;">📄 Générer PDF</button>
+            <button id="closeNcSection" style="background:none; border:none; cursor:pointer; color:#64748b; font-size:1.3rem; line-height:1; padding:0 4px;">✕</button>
+          </div>
+        </div>
+        <div id="ncTableContainer" style="padding:8px 0; overflow-x:auto;">
+          <p style="color:#94a3b8; text-align:center; padding:16px; font-size:0.85rem;">Chargement…</p>
+        </div>
+        <div id="ncChartContainer" style="display:none; padding:20px; border-top:1px solid var(--surface-border);">
+          <h4 style="margin:0 0 16px; color:var(--text-main); font-size:0.9rem; font-weight:600;">📊 Actions ouvertes par responsable</h4>
+          <canvas id="ncChart" style="max-height:260px;"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions Chart Modal -->
+    <div id="actionsChartModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; overflow-y:auto; padding:20px; backdrop-filter:blur(2px);">
+      <div style="background:var(--surface-color); border-radius:var(--radius-lg); border:1px solid var(--surface-border); max-width:860px; margin:40px auto 20px; padding:24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <h3 style="margin:0; color:var(--text-main); font-size:1.05rem; font-weight:700;">📊 Actions par responsable</h3>
+          <button id="closeActionsChart" style="background:none; border:none; cursor:pointer; color:#64748b; font-size:1.4rem; line-height:1; padding:2px 6px;">✕</button>
+        </div>
+        <div id="actionsChartStats" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;"></div>
+        <p id="actionsChartMsg" style="text-align:center; color:#94a3b8; padding:20px; margin:0; display:none;"></p>
+        <div style="position:relative;">
+          <canvas id="actionsChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-container">
+      <button class="btn-retour" id="logoutBtn">Déconnexion</button>
+    </div>
+  </div>
+  <script type="module">
+    import { supabase } from "./supabase.js";
+    import { clearAuditProgress } from "./utils.js";
+
+   //Authentification
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) window.location.href = "login.html";
+
+    // Recupertion des elements HTML
+    const statusContainer = document.getElementById("statusContainer");
+    const loadingState = document.getElementById("loadingState");
+    const errorMessage = document.getElementById("errorMessage");
+    const successMessage = document.getElementById("successMessage");
+    const baltimarBtn = document.getElementById("baltimarBtn");
+    const reveyBtn = document.getElementById("reveyBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const logosSection = document.getElementById("logosSection");
+    const extraButtons = document.getElementById("extraButtons");
+    const statsBtn = document.getElementById("statsBtn");
+
+    function setError(msg) {
+      errorMessage.textContent = msg || "";
+      errorMessage.style.display = msg ? "block" : "none";
+      successMessage.textContent = "";
+      successMessage.style.display = "none";
+      loadingState.style.display = "none";
+      statusContainer.style.display = "block";
+    }
+
+    function setSuccess(msg) {
+      successMessage.textContent = msg || "";
+      successMessage.style.display = msg ? "block" : "none";
+      errorMessage.textContent = "";
+      errorMessage.style.display = "none";
+      loadingState.style.display = "none";
+      statusContainer.style.display = "block";
+    }
+
+    function enableLogos() {
+      logosSection.style.display = "flex";
+      extraButtons.style.display = "flex";
+      baltimarBtn.disabled = false;
+      reveyBtn.disabled = false;
+      statusContainer.style.display = "none";
+    }
+
+    function disableLogos() {
+      logosSection.style.display = "none";
+      extraButtons.style.display = "none";
+      baltimarBtn.disabled = true;
+      reveyBtn.disabled = true;
+      statusContainer.style.display = "block";
+    }
+
+    function showUnauthorized() {
+      loadingState.style.display = "none";
+      errorMessage.style.display = "none";
+      successMessage.style.display = "none";
+      document.getElementById("unauthorizedState").style.display = "block";
+      statusContainer.style.display = "block";
+    }
+
+    function enableResponsable(username) {
+      logosSection.style.display = "none";
+      extraButtons.style.display = "flex";
+      baltimarBtn.disabled = true;
+      reveyBtn.disabled = true;
+      statusContainer.style.display = "block";
+      setSuccess("Bienvenue " + username + " !");
+    }
+
+    // Liaison et chargement automatique du profil utilisateur via son email Supabase
+    disableLogos();
+
+    const email = sessionData.session.user.email;
+    console.log("Utilisateur connecté :", email);
+
+    const { data: userData, error: userError } = await supabase
+      .from("authorized_users")
+      .select("username, role")
+      .ilike("email", email)
+      .maybeSingle();
+
+    if (userError) {
+      console.error("Erreur de récupération utilisateur :", userError);
+      setError("Erreur de connexion lors de la vérification de vos autorisations.");
+    } else if (!userData) {
+      setError("Votre adresse email (" + email + ") n'est pas autorisée dans le système d'audit.");
+    } else {
+      const username = userData.username;
+      const role = userData.role || "auditeur";
+
+      // Stockage local pour le fonctionnement des autres composants de l'application
+      localStorage.setItem("username", username);
+      sessionStorage.setItem("audit_username", username);
+      sessionStorage.setItem("audit_user_role", role);
+
+      if (role === "responsable") {
+        enableResponsable(username);
+      } else if (role === "auditeur") {
+        enableLogos();
+      } else if (role === "autre") {
+        showUnauthorized();
+      } else {
+        setError("Rôle non reconnu.");
+      }
+    }
+
+
+    baltimarBtn.addEventListener("click", () => {
+      window.location.href = "baltimar.html";
+    });
+
+    reveyBtn.addEventListener("click", () => {
+      window.location.href = "revey.html";
+    });
+
+    statsBtn.addEventListener("click", () => {
+      window.location.href = "visualisation.html?from=audit";
+    });
+
+    document.getElementById("historiqueBtn").addEventListener("click", () => {
+      window.location.href = "historique.html";
+    });
+
+    document.getElementById("correctiveActionsBtn").addEventListener("click", () => {
+      window.location.href = "my-actions.html";
+    });
+
+    const rapportBtn = document.getElementById("rapportBtn");
+    const ncManagementSection = document.getElementById("ncManagementSection");
+    const ncTableContainer = document.getElementById("ncTableContainer");
+    const generateNcPdfBtn = document.getElementById("generateNcPdfBtn");
+    const closeNcSectionBtn = document.getElementById("closeNcSection");
+
+    let ncData = [];
+    let ncChart = null;
+
+    function getNCStatus(nc) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const delai = new Date(nc.delai);
+      delai.setHours(0, 0, 0, 0);
+
+      if (nc.date_closed) {
+        const closed = new Date(nc.date_closed);
+        closed.setHours(0, 0, 0, 0);
+        if (closed > delai)
+          return { label: "Closed but late",         color: "#ea580c", bg: "rgba(234,88,12,0.1)",   icon: "🔴" };
+        else
+          return { label: "Closed within schedule",  color: "#059669", bg: "rgba(5,150,105,0.1)",   icon: "✅" };
+      } else {
+        if (delai < today)
+          return { label: "Open but late",           color: "#dc2626", bg: "rgba(220,38,38,0.1)",   icon: "🔴" };
+        else
+          return { label: "Open within schedule",    color: "#0ea5e9", bg: "rgba(14,165,233,0.1)",  icon: "🔵" };
+      }
+    }
+
+    function renderNCChart() {
+      const chartContainer = document.getElementById("ncChartContainer");
+      const canvas = document.getElementById("ncChart");
+
+      const openNCs = ncData.filter(nc => !nc.date_closed);
+      if (!openNCs.length) { chartContainer.style.display = "none"; return; }
+
+      chartContainer.style.display = "block";
+
+      const byResp = {};
+      openNCs.forEach(nc => {
+        const resps = (nc.responsable || "—").split(",").map(r => r.trim()).filter(Boolean);
+        const st = getNCStatus(nc);
+        resps.forEach(resp => {
+          if (!byResp[resp]) byResp[resp] = { late: 0, onTime: 0 };
+          if (st.label === "Open but late") byResp[resp].late++;
+          else byResp[resp].onTime++;
+        });
+      });
+
+      const labels   = Object.keys(byResp);
+      const lateData  = labels.map(r => byResp[r].late);
+      const onTimeData = labels.map(r => byResp[r].onTime);
+
+      if (ncChart) ncChart.destroy();
+      ncChart = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "Open but late",          data: lateData,   backgroundColor: "rgba(220,38,38,0.75)",   borderRadius: 6 },
+            { label: "Open within schedule",   data: onTimeData, backgroundColor: "rgba(14,165,233,0.75)",  borderRadius: 6 }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: "bottom", labels: { font: { size: 11 } } },
+            tooltip: { callbacks: { label: c => ` ${c.dataset.label} : ${c.parsed.y}` } }
+          },
+          scales: {
+            x: { stacked: true, grid: { display: false } },
+            y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+          }
+        }
+      });
+    }
+
+    function renderNCTable() {
+      const tdStyle = "padding:10px 12px;border-bottom:1px solid #e2e8f0;font-size:0.81rem;";
+
+      const rows = ncData.map(nc => {
+        const date  = new Date(nc.created_at).toLocaleDateString("fr-FR");
+        const delai = new Date(nc.delai).toLocaleDateString("fr-FR");
+        const st    = getNCStatus(nc);
+
+        const statusBadge = `<span style="background:${st.bg};color:${st.color};padding:3px 8px;border-radius:12px;font-size:0.73rem;font-weight:600;white-space:nowrap;">${st.icon} ${st.label}</span>`;
+
+        const currentUser = (sessionStorage.getItem("audit_username") || "").toLowerCase().trim();
+        const isOwner = nc.responsable &&
+          nc.responsable.split(",").some(r => r.trim().toLowerCase() === currentUser);
+
+        let closedCell;
+        if (nc.date_closed) {
+          closedCell = `<span style="font-weight:600;color:#059669;">${new Date(nc.date_closed).toLocaleDateString("fr-FR")}</span>`;
+        } else if (isOwner) {
+          closedCell = `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <input type="date" id="cd-${nc.id}"
+                   style="padding:3px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:0.78rem;font-family:inherit;color:#1e293b;">
+            <button onclick="cloturerNC('${nc.id}')"
+                    style="padding:3px 10px;background:#059669;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.76rem;font-weight:600;white-space:nowrap;">
+              Clôturer
+            </button>
+          </div>`;
+        } else {
+          closedCell = `<span style="color:#94a3b8;font-size:0.78rem;">—</span>`;
+        }
+
+        let ncPhotoUrls = [];
+        if (nc.image_url) {
+          try { ncPhotoUrls = JSON.parse(nc.image_url); } catch { ncPhotoUrls = [nc.image_url]; }
+          if (!Array.isArray(ncPhotoUrls)) ncPhotoUrls = [nc.image_url];
+        }
+        const photoCell = ncPhotoUrls.length
+          ? `<div style="display:flex;flex-direction:column;gap:4px;">${ncPhotoUrls.map(u => `<a href="${u}" target="_blank"><img src="${u}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;cursor:pointer;display:block;"></a>`).join("")}</div>`
+          : `<span style="color:#94a3b8;font-size:0.78rem;">—</span>`;
+
+        const delaiCell = !nc.date_closed && isOwner
+          ? `<div>
+               <span id="delai-txt-${nc.id}" style="font-weight:600;">${delai}</span>
+               <button onclick="editDelai('${nc.id}','${nc.delai}')"
+                       style="background:none;border:none;cursor:pointer;font-size:0.85rem;padding:0 3px;vertical-align:middle;"
+                       title="Modifier la date de réalisation">✏️</button>
+               <div id="delai-form-${nc.id}" style="display:none;align-items:center;gap:4px;flex-wrap:wrap;margin-top:4px;">
+                 <input type="date" id="delai-input-${nc.id}" value="${nc.delai}"
+                        style="padding:3px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:0.78rem;font-family:inherit;color:#1e293b;">
+                 <button onclick="saveDelai('${nc.id}')"
+                         style="padding:3px 10px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;font-size:0.76rem;font-weight:600;">✓ Valider</button>
+                 <button onclick="cancelDelai('${nc.id}')"
+                         style="padding:3px 8px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:6px;cursor:pointer;font-size:0.76rem;font-weight:600;">✕</button>
+               </div>
+             </div>`
+          : `<span style="font-weight:600;">${delai}</span>`;
+
+        return `<tr>
+          <td style="${tdStyle}white-space:nowrap;">${date}</td>
+          <td style="${tdStyle}max-width:200px;">${nc.description}</td>
+          <td style="${tdStyle}">
+            <div style="display:flex;flex-wrap:wrap;gap:3px;">
+              ${(nc.responsable || "—").split(",").map(r => r.trim()).filter(Boolean).map(r =>
+                `<span style="padding:2px 8px;background:rgba(59,130,246,0.1);color:#2563eb;border-radius:12px;font-size:0.73rem;font-weight:600;white-space:nowrap;">${r}</span>`
+              ).join("")}
+            </div>
+          </td>
+          <td style="${tdStyle}">${delaiCell}</td>
+          <td style="${tdStyle}">${statusBadge}</td>
+          <td style="${tdStyle}">${closedCell}</td>
+          <td style="${tdStyle}">${photoCell}</td>
+        </tr>`;
+      }).join("");
+
+      const thStyle = "padding:10px 12px;text-align:left;font-size:0.75rem;font-weight:600;color:#475569;border-bottom:2px solid #e2e8f0;white-space:nowrap;";
+      ncTableContainer.innerHTML = `
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;min-width:850px;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="${thStyle}">Date</th>
+                <th style="${thStyle}">Description</th>
+                <th style="${thStyle}">Responsable</th>
+                <th style="${thStyle}">Délai</th>
+                <th style="${thStyle}">Statut</th>
+                <th style="${thStyle}">Date de clôture</th>
+                <th style="${thStyle}">Photos</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+
+      renderNCChart();
+    }
+
+    window.cloturerNC = async function(id) {
+      const dateInput = document.getElementById(`cd-${id}`);
+      if (!dateInput?.value) {
+        alert("Veuillez sélectionner une date de clôture.");
+        return;
+      }
+      const btn = dateInput.nextElementSibling;
+      if (btn) { btn.disabled = true; btn.textContent = "⏳"; }
+
+      const { data: updated, error } = await supabase
+        .from("non_conformites")
+        .update({ date_closed: dateInput.value })
+        .eq("id", id)
+        .select();
+
+      if (error) {
+        alert("Erreur : " + error.message);
+        if (btn) { btn.disabled = false; btn.textContent = "Clôturer"; }
+        return;
+      }
+
+      if (!updated || updated.length === 0) {
+        alert("La sauvegarde a échoué : accès refusé par Supabase (RLS).\nAjoutez une politique UPDATE dans votre table non_conformites.");
+        if (btn) { btn.disabled = false; btn.textContent = "Clôturer"; }
+        return;
+      }
+
+      const nc = ncData.find(n => n.id === id);
+      if (nc) nc.date_closed = dateInput.value;
+      renderNCTable();
+    };
+
+    // ── MODIFIER DÉLAI NC ──────────────────────────────────────────────────
+    window.editDelai = function(id, currentDate) {
+      document.getElementById(`delai-txt-${id}`).style.display = "none";
+      const btn = document.querySelector(`[onclick="editDelai('${id}','${currentDate}')"]`);
+      if (btn) btn.style.display = "none";
+      const form = document.getElementById(`delai-form-${id}`);
+      form.style.display = "flex";
+      const input = document.getElementById(`delai-input-${id}`);
+      input.value = currentDate;
+    };
+
+    window.cancelDelai = function(id) {
+      document.getElementById(`delai-form-${id}`).style.display = "none";
+      document.getElementById(`delai-txt-${id}`).style.display = "";
+      const nc = ncData.find(n => n.id === id);
+      const btn = document.querySelector(`[onclick*="editDelai('${id}'"]`);
+      if (btn) btn.style.display = "";
+    };
+
+    window.saveDelai = async function(id) {
+      const newDate = document.getElementById(`delai-input-${id}`).value;
+      if (!newDate) {
+        document.getElementById(`delai-input-${id}`).style.borderColor = "#ef4444";
+        return;
+      }
+      const saveBtn = document.querySelector(`#delai-form-${id} button`);
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "⏳"; }
+
+      const { error } = await supabase
+        .from("non_conformites")
+        .update({ delai: newDate })
+        .eq("id", id);
+
+      if (error) {
+        alert("Erreur lors de la modification : " + error.message);
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "✓ Valider"; }
+        return;
+      }
+
+      const nc = ncData.find(n => n.id === id);
+      if (nc) nc.delai = newDate;
+      renderNCTable();
+    };
+
+    rapportBtn.addEventListener("click", async () => {
+      rapportBtn.disabled = true;
+      rapportBtn.textContent = "⏳ Chargement…";
+
+      const { data, error } = await supabase
+        .from("non_conformites")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      rapportBtn.disabled = false;
+      rapportBtn.textContent = "📄 Télécharger rapport Non-conformités";
+
+      if (error || !data) {
+        alert("Erreur lors de la récupération des non-conformités.");
+        return;
+      }
+      if (data.length === 0) {
+        alert("Aucune non-conformité enregistrée pour le moment.");
+        return;
+      }
+
+      ncData = data;
+      renderNCTable();
+      ncManagementSection.style.display = "block";
+      ncManagementSection.scrollIntoView({ behavior: "smooth" });
+    });
+
+    closeNcSectionBtn.addEventListener("click", () => {
+      ncManagementSection.style.display = "none";
+    });
+
+    generateNcPdfBtn.addEventListener("click", () => {
+      const statusColors = {
+        "Closed but late":        { color: "#ea580c" },
+        "Closed within schedule": { color: "#059669" },
+        "Open but late":          { color: "#dc2626" },
+        "Open within schedule":   { color: "#0ea5e9" },
+      };
+
+      const rows = ncData.map(nc => {
+        const date      = new Date(nc.created_at).toLocaleDateString("fr-FR");
+        const delai     = new Date(nc.delai).toLocaleDateString("fr-FR");
+        const dateClosed = nc.date_closed
+          ? new Date(nc.date_closed).toLocaleDateString("fr-FR")
+          : "—";
+        const st    = getNCStatus(nc);
+        const color = statusColors[st.label]?.color || "#475569";
+        let photoUrls = [];
+        if (nc.image_url) {
+          try { photoUrls = JSON.parse(nc.image_url); } catch { photoUrls = [nc.image_url]; }
+          if (!Array.isArray(photoUrls)) photoUrls = [nc.image_url];
+        }
+        const photo = photoUrls.length
+          ? photoUrls.map(u => `<img src="${u}" style="max-width:120px;max-height:100px;object-fit:cover;border-radius:6px;margin-bottom:4px;display:block;">`).join("")
+          : "—";
+        return `<tr>
+          <td>${date}</td>
+          <td style="max-width:200px">${nc.description}</td>
+          <td>${nc.responsable}</td>
+          <td>${delai}</td>
+          <td style="color:${color};font-weight:600;font-size:0.78rem;">${st.label}</td>
+          <td style="font-weight:600;">${dateClosed}</td>
+          <td>${photo}</td>
+        </tr>`;
+      }).join("");
+
+      const generatedOn = new Date().toLocaleDateString("fr-FR", {
+        year: "numeric", month: "long", day: "numeric"
+      });
+
+      const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Rapport Non-conformités</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Inter, Arial, sans-serif; padding: 36px; color: #1e293b; font-size: 13px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; border-bottom: 3px solid #26914d; padding-bottom: 18px; }
+    .header h1 { font-size: 1.6rem; font-weight: 800; color: #1e293b; }
+    .header .meta { color: #64748b; margin-top: 4px; font-size: 0.85rem; }
+    .badge { background: #fef3c7; color: #b45309; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    thead th { background: #26914d; color: white; padding: 10px 12px; text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    tbody td { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    tbody tr:nth-child(even) td { background: #f8fafc; }
+    .btn-print { margin-bottom: 24px; padding: 10px 22px; background: #26914d; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600; }
+    .btn-print:hover { background: #d97706; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body>
+  <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
+  <div class="header">
+    <div>
+      <h1>⚠️ Rapport Non-conformités</h1>
+      <div class="meta">Généré le ${generatedOn}</div>
+    </div>
+    <div class="badge">${ncData.length} signalement${ncData.length > 1 ? "s" : ""}</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Description</th>
+        <th>Responsable</th>
+        <th>Délai correction</th>
+        <th>Statut</th>
+        <th>Date de clôture</th>
+        <th>Photo</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body>
+</html>`;
+
+      const win = window.open("", "_blank");
+      win.document.write(html);
+      win.document.close();
+    });
+
+
+    // Actions Chart Modal
+    const actionsChartBtn = document.getElementById("actionsChartBtn");
+    const actionsChartModal = document.getElementById("actionsChartModal");
+    let actionsChartInstance = null;
+
+    actionsChartBtn.addEventListener("click", async () => {
+      actionsChartModal.style.display = "block";
+      document.getElementById("actionsChartMsg").style.display = "none";
+      document.getElementById("actionsChartStats").innerHTML = "";
+      actionsChartBtn.disabled = true;
+      actionsChartBtn.textContent = "⏳ Chargement…";
+
+      const { data, error } = await supabase
+        .from("corrective_actions")
+        .select("responsable, due_date, date_closed, status");
+
+      actionsChartBtn.disabled = false;
+      actionsChartBtn.textContent = "📊 Actions par responsable";
+
+      const msg = document.getElementById("actionsChartMsg");
+      if (error || !data || data.length === 0) {
+        msg.style.display = "block";
+        msg.textContent = error ? "Erreur lors du chargement des données." : "Aucune action enregistrée.";
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const totals = { openLate: 0, openOnTime: 0, closedLate: 0, closedOnTime: 0 };
+      const byResp = {};
+
+      data.forEach(nc => {
+        const resps = (nc.responsable || "—").split(",").map(r => r.trim()).filter(Boolean);
+        const isClosed = nc.status === "Closed" || !!nc.date_closed;
+
+        resps.forEach(resp => {
+          if (!byResp[resp]) byResp[resp] = { openLate: 0, openOnTime: 0, closedLate: 0, closedOnTime: 0 };
+
+          if (isClosed) {
+            if (nc.date_closed && nc.due_date) {
+              const closed = new Date(nc.date_closed); closed.setHours(0,0,0,0);
+              const delai  = new Date(nc.due_date);    delai.setHours(0,0,0,0);
+              if (closed > delai) { byResp[resp].closedLate++;  totals.closedLate++; }
+              else                { byResp[resp].closedOnTime++; totals.closedOnTime++; }
+            } else {
+              byResp[resp].closedOnTime++; totals.closedOnTime++;
+            }
+          } else {
+            if (nc.due_date) {
+              const delai = new Date(nc.due_date); delai.setHours(0,0,0,0);
+              if (delai < today) { byResp[resp].openLate++;  totals.openLate++; }
+              else               { byResp[resp].openOnTime++; totals.openOnTime++; }
+            } else {
+              byResp[resp].openOnTime++; totals.openOnTime++;
+            }
+          }
+        });
+      });
+
+      const statDefs = [
+        { key: "openLate",    label: "Open but late",          color: "#dc2626", bg: "rgba(220,38,38,0.1)",  icon: "🔴" },
+        { key: "openOnTime",  label: "Open within schedule",   color: "#0ea5e9", bg: "rgba(14,165,233,0.1)", icon: "🔵" },
+        { key: "closedLate",  label: "Closed but late",        color: "#ea580c", bg: "rgba(234,88,12,0.1)",  icon: "🟠" },
+        { key: "closedOnTime",label: "Closed within schedule", color: "#059669", bg: "rgba(5,150,105,0.1)",  icon: "✅" },
+      ];
+
+      document.getElementById("actionsChartStats").innerHTML = statDefs.map(s => `
+        <div style="flex:1;min-width:140px;background:${s.bg};border:1px solid ${s.color}44;border-radius:10px;padding:10px 14px;text-align:center;">
+          <div style="font-size:1.5rem;font-weight:800;color:${s.color};">${totals[s.key]}</div>
+          <div style="font-size:0.72rem;color:${s.color};font-weight:600;margin-top:3px;">${s.icon} ${s.label}</div>
+        </div>
+      `).join("");
+
+      const labels = Object.keys(byResp).sort();
+      const canvas = document.getElementById("actionsChart");
+      canvas.style.height = Math.max(220, labels.length * 46 + 70) + "px";
+
+      if (actionsChartInstance) actionsChartInstance.destroy();
+      actionsChartInstance = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "Open but late",          data: labels.map(r => byResp[r].openLate),    backgroundColor: "rgba(220,38,38,0.85)",  borderRadius: 4 },
+            { label: "Open within schedule",   data: labels.map(r => byResp[r].openOnTime),  backgroundColor: "rgba(14,165,233,0.85)", borderRadius: 4 },
+            { label: "Closed but late",        data: labels.map(r => byResp[r].closedLate),  backgroundColor: "rgba(234,88,12,0.85)",  borderRadius: 4 },
+            { label: "Closed within schedule", data: labels.map(r => byResp[r].closedOnTime),backgroundColor: "rgba(5,150,105,0.85)",  borderRadius: 4 },
+          ]
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom", labels: { font: { size: 11 }, padding: 16 } },
+            tooltip: { callbacks: { label: c => ` ${c.dataset.label} : ${c.parsed.x}` } }
+          },
+          scales: {
+            x: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, grid: { color: "rgba(148,163,184,0.15)" } },
+            y: { stacked: true, grid: { display: false }, ticks: { font: { size: 12 } } }
+          }
+        }
+      });
+    });
+
+    document.getElementById("closeActionsChart").addEventListener("click", () => {
+      actionsChartModal.style.display = "none";
+    });
+    actionsChartModal.addEventListener("click", e => {
+      if (e.target === actionsChartModal) actionsChartModal.style.display = "none";
+    });
+
+    logoutBtn.addEventListener("click", async () => {
+      sessionStorage.clear();
+      clearAuditProgress();
+      await supabase.auth.signOut();
+      window.location.href = "login.html";
+    });
+  </script>
+
+</body>
+
+</html>

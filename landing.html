@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accueil - Système de Gestion Qualité</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" href="logo4.png">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Plateforme de gestion qualité : audit, visualisation et non-conformités">
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="./pwa.js"></script>
+</head>
+
+<body class="page-landing">
+
+  <!-- Header -->
+  <header class="landing-header">
+    <img src="icon.png" alt="Logo" class="landing-logo" id="main-logo">
+    <h1 class="landing-title">Système de Gestion Qualité</h1>
+  </header>
+
+  <!-- Cards -->
+  <main>
+    <div class="cards-grid">
+
+      <!-- Audit -->
+      <a href="login.html" class="action-card audit" id="card-audit" aria-label="Accéder à l'audit">
+        <span class="card-badge">Sécurisé</span>
+        <div class="card-icon-wrap" aria-hidden="true">📋</div>
+        <div class="card-body">
+          <div class="card-title">Audit & Suivi</div>
+          <div class="card-desc">Réalisez et soumettez vos audits.</div>
+        </div>
+        <div class="card-arrow" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </div>
+      </a>
+
+      <!-- Non-conformité -->
+      <a href="login.html?redirect=non-conformite.html" class="action-card nc" id="card-nc" aria-label="Ajouter une non-conformité">
+        <span class="card-badge">Signalement</span>
+        <div class="card-icon-wrap" aria-hidden="true">⚠️</div>
+        <div class="card-body">
+          <div class="card-title">Non-conformité</div>
+          <div class="card-desc">Signalez et enregistrez rapidement une non-conformité.</div>
+        </div>
+        <div class="card-arrow" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </div>
+      </a>
+
+
+
+    </div>
+  </main>
+
+</body>
+</html>

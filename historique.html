@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapports d'audit</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="logo5.png">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f172a">
+</head>
+<script src="./pwa.js"></script>
+
+<body>
+  <div class="container" style="max-width: 800px;">
+    <h1>Rapports d'audit</h1>
+
+    <div class="hist-panel">
+      <div class="hist-panel-header">
+        <h3>📁 Rapports d'audit enregistrés</h3>
+      </div>
+      <!-- Filtres -->
+      <div class="hist-filters">
+        <div class="hist-filter-group">
+          <label class="hist-filter-label">Entreprise</label>
+          <select id="histFilterCompany" class="hist-filter-select">
+            <option value="">Toutes</option>
+            <option value="baltimar">Baltimar</option>
+            <option value="revey">Revey</option>
+          </select>
+        </div>
+        <div class="hist-filter-group">
+          <label class="hist-filter-label">Type d'audit</label>
+          <select id="histFilterAudit" class="hist-filter-select">
+            <option value="">Tous</option>
+          </select>
+        </div>
+        <div class="hist-filter-group">
+          <label class="hist-filter-label">Zone</label>
+          <select id="histFilterZone" class="hist-filter-select">
+            <option value="">Toutes</option>
+          </select>
+        </div>
+      </div>
+      <div id="downloadHistoryList" class="hist-list">
+        <p class="hist-empty">Chargement…</p>
+      </div>
+    </div>
+
+    <div class="btn-container">
+      <a href="accueil.html" class="btn-retour">← Retour à l'accueil</a>
+    </div>
+  </div>
+
+  <script type="module" src="./historique.js"></script>
+</body>
+
+</html>

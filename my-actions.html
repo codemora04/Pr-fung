@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mes Actions Correctives</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="logo3.png">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.31/dist/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="./pwa.js"></script>
+</head>
+<body>
+  <div class="container" style="max-width:1100px;">
+
+    <!-- Header -->
+    <div class="ma-header">
+      <div class="ma-header-left">
+        <h1 class="ma-title">📋 Actions Correctives</h1>
+        <p class="ma-subtitle" id="ma-username-label">Chargement…</p>
+      </div>
+      <div class="ma-header-right">
+        <button id="ma-refresh-btn" class="btn-retour" style="padding:8px 18px;font-size:0.85rem;margin:0;">🔄 Actualiser</button>
+        <a href="accueil.html" class="btn-retour" style="padding:8px 18px;font-size:0.85rem;margin:0;">← Retour</a>
+      </div>
+    </div>
+
+    <!-- View Toggle -->
+    <div class="ma-view-toggle" id="ma-view-toggle">
+      <button class="ma-view-btn" id="btn-view-all" data-view="all">
+         Vue complète
+      </button>
+      <button class="ma-view-btn" id="btn-view-mine" data-view="mine">
+         Mes actions
+      </button>
+    </div>
+
+    <!-- Stats Row -->
+    <div id="ma-stats-row" class="ma-stats-row"></div>
+
+    <!-- Filter Tabs -->
+    <div class="ma-tabs" id="ma-tabs">
+      <button class="ma-tab active" data-filter="all">Toutes</button>
+      <button class="ma-tab" data-filter="Open">Open</button>
+      <button class="ma-tab" data-filter="In Progress">En cours</button>
+      <button class="ma-tab" data-filter="Late">En retard</button>
+      <button class="ma-tab" data-filter="Closed">Clôturées</button>
+    </div>
+
+    <!-- Report buttons -->
+    <div class="ma-report-row">
+      <button id="ma-pdf-open-btn"   class="ma-report-btn ma-report-open">📄 PDF — Actions ouvertes</button>
+      <button id="ma-pdf-closed-btn" class="ma-report-btn ma-report-closed">📄 PDF — Actions clôturées</button>
+      <button id="ma-xls-btn"        class="ma-report-btn ma-report-excel">📊 Excel — Toutes</button>
+    </div>
+
+    <!-- Actions List -->
+    <div id="ma-list" class="ma-list">
+      <div class="ma-loading">Chargement des actions…</div>
+    </div>
+
+  </div>
+
+  <!-- Closure Modal -->
+  <div id="closure-modal" class="ca-modal-overlay" style="display:none;">
+    <div class="ca-modal">
+      <div class="ca-modal-header">
+        <h3>Clôturer l'action corrective</h3>
+        <button id="close-closure-modal" class="ca-modal-close">✕</button>
+      </div>
+      <div class="ca-modal-body">
+        <div class="ca-field-group">
+          <label class="ca-label">Date de clôture *</label>
+          <input type="date" id="closure-date" class="ca-input">
+        </div>
+        <div class="ca-field-group">
+          <label class="ca-label">Plan d'action — ce que vous avez fait *</label>
+          <textarea id="closure-plan" class="ca-input closure-plan-textarea"
+            rows="4"
+            placeholder="Décrivez les mesures prises pour résoudre la non-conformité…"></textarea>
+        </div>
+        <div class="ca-field-group">
+          <label class="ca-label">Preuve (image obligatoire) *</label>
+          <label class="closure-upload-zone" id="closure-upload-zone" for="closure-image-input">
+            <span class="closure-upload-icon">📷</span>
+            <span class="closure-upload-text" id="closure-upload-text">Cliquez pour choisir une image</span>
+            <input type="file" id="closure-image-input" accept="image/*" style="display:none;">
+          </label>
+          <div id="closure-image-preview-wrap" style="display:none;margin-top:8px;">
+            <img id="closure-image-preview" src="" alt="Aperçu" class="closure-preview-img">
+            <button type="button" id="closure-image-remove" class="closure-remove-btn">✕ Supprimer</button>
+          </div>
+        </div>
+        <div id="closure-modal-error" class="ca-modal-error" style="display:none;"></div>
+      </div>
+      <div class="ca-modal-footer">
+        <button id="closure-confirm-btn" class="ca-save-btn" type="button">✅ Confirmer la clôture</button>
+        <button id="close-closure-modal-2" class="ca-cancel-btn" type="button">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase.js";
+    import { showLoading, hideLoading }          from "./utils.js";
+    import {
+      computeEffectiveStatus,
+      getStatusCfg,
+      loadMyCorrectiveActions,
+      loadAllCorrectiveActions,
+      updateCorrectiveActionStatus,
+      uploadClosureEvidence,
+      loadAuditImagesForActions,
+    } from "./corrective-actions.js";
+
+    // ── AUTH & USER ──────────────────────────────────────────────────────────
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) { window.location.href = "login.html"; }
+
+    const username = sessionStorage.getItem("audit_username");
+    const role     = sessionStorage.getItem("audit_user_role");
+    if (!username) { window.location.href = "accueil.html"; }
+
+    const isAuditor = role === "auditeur";
+
+    // ── STATE ────────────────────────────────────────────────────────────────
+    let allActions      = [];
+    let auditImagesMap  = new Map();
+    let activeFilter    = "all";
+    let activeView      = isAuditor ? "all" : "mine";
+    let pendingClosureId = null;
+
+    // ── VIEW TOGGLE INIT ─────────────────────────────────────────────────────
+    function setActiveView(view) {
+      activeView = view;
+      document.querySelectorAll(".ma-view-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.view === view);
+      });
+      const subtitleEl = document.getElementById("ma-username-label");
+      if (view === "all") {
+        subtitleEl.textContent = `Vue complète — ${username}`;
+      } else {
+        subtitleEl.textContent = `Mes actions — ${username}`;
+      }
+      loadActions();
+    }
+
+    document.getElementById("ma-view-toggle").addEventListener("click", e => {
+      const btn = e.target.closest(".ma-view-btn");
+      if (!btn || btn.dataset.view === activeView) return;
+      setActiveView(btn.dataset.view);
+    });
+
+    // ── LOAD ─────────────────────────────────────────────────────────────────
+    async function loadActions() {
+      showLoading("Chargement des actions…");
+      try {
+        allActions = activeView === "all"
+          ? await loadAllCorrectiveActions()
+          : await loadMyCorrectiveActions(username);
+        auditImagesMap = await loadAuditImagesForActions(allActions);
+      } catch (e) {
+        alert("Erreur chargement : " + e.message);
+      } finally {
+        hideLoading();
+      }
+      renderStats();
+      renderList();
+    }
+
+    // ── STATS ────────────────────────────────────────────────────────────────
+    function renderStats() {
+      const counts = { Open: 0, "In Progress": 0, Late: 0, Closed: 0 };
+      allActions.forEach(a => {
+        const s = computeEffectiveStatus(a.status, a.due_date);
+        if (counts[s] !== undefined) counts[s]++;
+      });
+      const total = allActions.length;
+      const defs = [
+        { key: "Open",        icon: "🔵", label: "Ouvertes"  },
+        { key: "In Progress", icon: "🟠", label: "En cours"  },
+        { key: "Late",        icon: "🔴", label: "En retard" },
+        { key: "Closed",      icon: "✅", label: "Clôturées" },
+      ];
+      document.getElementById("ma-stats-row").innerHTML = `
+        <div class="ma-stat-card ma-stat-total">
+          <div class="ma-stat-num">${total}</div>
+          <div class="ma-stat-lbl">Total</div>
+        </div>
+        ${defs.map(d => {
+          const cfg = getStatusCfg(d.key);
+          return `<div class="ma-stat-card" style="border-color:${cfg.color}44;background:${cfg.bg};">
+            <div class="ma-stat-num" style="color:${cfg.color};">${counts[d.key]}</div>
+            <div class="ma-stat-lbl" style="color:${cfg.color};">${d.icon} ${d.label}</div>
+          </div>`;
+        }).join("")}
+      `;
+    }
+
+    // ── FILTER ───────────────────────────────────────────────────────────────
+    document.getElementById("ma-tabs").addEventListener("click", e => {
+      const tab = e.target.closest(".ma-tab");
+      if (!tab) return;
+      document.querySelectorAll(".ma-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      activeFilter = tab.dataset.filter;
+      renderList();
+    });
+
+    function filteredActions() {
+      if (activeFilter === "all") return allActions;
+      return allActions.filter(a =>
+        computeEffectiveStatus(a.status, a.due_date) === activeFilter
+      );
+    }
+
+    // ── RENDER LIST ──────────────────────────────────────────────────────────
+    function renderList() {
+      const list = document.getElementById("ma-list");
+      const data = filteredActions();
+      if (!data.length) {
+        list.innerHTML = `<div class="ma-empty">Aucune action pour ce filtre.</div>`;
+        return;
+      }
+      list.innerHTML = data.map(a => buildCard(a)).join("");
+      attachCardListeners(list, data);
+    }
+
+    function priorityBadge(p) {
+      const cls = { Low: "ca-priority-low", Medium: "ca-priority-medium", High: "ca-priority-high" };
+      return `<span class="ca-priority-badge ${cls[p] || ""}">${p}</span>`;
+    }
+
+    function auditPhotosHtml(a) {
+      const key = `${a.session_id}|${a.rubrique || ""}|${a.question}`;
+      const urls = auditImagesMap.get(key) || [];
+      if (!urls.length) return "";
+      return `
+        <div class="ma-audit-photos">
+          <span class="ma-audit-photos-label">📷 Photos de l'auditeur</span>
+          <div class="ma-audit-thumbs">
+            ${urls.map(url => `
+              <a href="${url}" target="_blank" class="ma-audit-thumb-link">
+                <img src="${url}" class="ma-audit-thumb" alt="Photo audit" loading="lazy">
+              </a>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function buildCard(a) {
+      const eff = computeEffectiveStatus(a.status, a.due_date);
+      const cfg = getStatusCfg(eff);
+      const dueStr  = a.due_date  ? new Date(a.due_date).toLocaleDateString("fr-FR")  : "—";
+      const createdStr = a.date_created ? new Date(a.date_created).toLocaleDateString("fr-FR") : "—";
+      const closedStr  = a.date_closed  ? new Date(a.date_closed).toLocaleDateString("fr-FR")  : null;
+
+      const delayDays = (() => {
+        if (!a.date_closed || !a.due_date) return null;
+        const d = (new Date(a.date_closed) - new Date(a.due_date)) / 86400000;
+        return Math.round(d);
+      })();
+
+      const statusBadge = `<span class="ca-status-badge" style="background:${cfg.bg};color:${cfg.color};">${eff}</span>`;
+
+      const closureSection = eff === "Closed" ? `
+        <div class="ma-card-closure">
+          <div class="ma-closure-row">
+            <span class="ma-closure-label">✅ Clôturé le</span>
+            <span class="ma-closure-val">${closedStr || "—"} ${a.closed_by ? "par " + a.closed_by : ""}</span>
+          </div>
+          ${delayDays !== null ? `<div class="ma-closure-row">
+            <span class="ma-closure-label">Délai</span>
+            <span class="ma-closure-val" style="color:${delayDays > 0 ? "#ef4444" : "#10b981"}">
+              ${delayDays > 0 ? "+" + delayDays + " j retard" : delayDays === 0 ? "Dans les délais" : Math.abs(delayDays) + " j d'avance"}
+            </span>
+          </div>` : ""}
+          ${a.closure_comment ? `<div class="ma-closure-row"><span class="ma-closure-label">Commentaire</span><span class="ma-closure-val">${a.closure_comment}</span></div>` : ""}
+          ${a.closure_image_url ? `<div class="ma-closure-row"><span class="ma-closure-label">Preuve</span><a href="${a.closure_image_url}" target="_blank" class="ma-evidence-link">🖼️ Voir la preuve</a></div>` : ""}
+        </div>
+      ` : "";
+
+      const isMyAction = a.responsable &&
+        a.responsable.split(",").some(r => r.trim().toLowerCase() === username.trim().toLowerCase());
+      const actionButtons = eff !== "Closed" && isMyAction ? `
+        <div class="ma-card-actions">
+          ${eff !== "In Progress" ? `<button class="ma-btn-inprogress" data-id="${a.id}">▶ Marquer En cours</button>` : `<button class="ma-btn-inprogress disabled" disabled>▶ En cours</button>`}
+          <button class="ma-btn-close" data-id="${a.id}">✅ Clôturer</button>
+        </div>
+      ` : "";
+
+      return `
+        <div class="ma-card" data-id="${a.id}" style="border-left:4px solid ${cfg.color};">
+          <div class="ma-card-head">
+            <div class="ma-card-meta">
+              <span class="ma-audit-name">${a.audit_name || "—"}</span>
+              <span class="ma-zone">${[a.zone, a.sous_zone].filter(Boolean).join(" › ")}</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              ${priorityBadge(a.priority)}
+              ${statusBadge}
+            </div>
+          </div>
+          <div class="ma-card-question">${a.question}</div>
+          ${auditPhotosHtml(a)}
+          <div class="ma-card-body">
+            <div class="ma-info-row"><span class="ma-info-label">Action requise</span><span class="ma-info-val">${a.action_required}</span></div>
+            ${a.non_conformity_comment ? `<div class="ma-info-row"><span class="ma-info-label">Commentaire NC</span><span class="ma-info-val">${a.non_conformity_comment}</span></div>` : ""}
+            <div class="ma-info-row">
+              <span class="ma-info-label">Responsable(s)</span>
+              <span class="ma-info-val">
+                <span class="ms-tags">${(a.responsable || "—").split(",").map(r => r.trim()).filter(Boolean).map(r =>
+                  `<span class="ms-tag${r.toLowerCase() === username.toLowerCase() ? " ms-tag-me" : ""}">${r}</span>`
+                ).join("")}</span>
+              </span>
+            </div>
+            <div class="ma-info-row">
+              <span class="ma-info-label">Date limite</span>
+              <span class="ma-info-val">
+                <span class="ma-due-text" id="due-text-${a.id}" style="color:${cfg.color};font-weight:600;">${dueStr}</span>
+                ${isMyAction && eff !== "Closed" ? `
+                  <button class="ma-due-edit-btn" data-id="${a.id}" title="Modifier la date de réalisation">✏️</button>
+                  <span class="ma-due-form" id="due-form-${a.id}" style="display:none;">
+                    <input type="date" class="ma-due-input" id="due-input-${a.id}" value="${a.due_date || ''}">
+                    <button class="ma-due-save-btn" data-id="${a.id}" title="Valider">✓</button>
+                    <button class="ma-due-cancel-btn" data-id="${a.id}" title="Annuler">✕</button>
+                  </span>
+                ` : ""}
+              </span>
+            </div>
+            <div class="ma-info-row"><span class="ma-info-label">Créée le</span><span class="ma-info-val">${createdStr} par ${a.created_by || "—"}</span></div>
+          </div>
+          ${closureSection}
+          ${actionButtons}
+        </div>
+      `;
+    }
+
+    function attachCardListeners(list, data) {
+      list.querySelectorAll(".ma-btn-inprogress:not(.disabled)").forEach(btn => {
+        btn.addEventListener("click", () => markInProgress(btn.dataset.id));
+      });
+      list.querySelectorAll(".ma-btn-close").forEach(btn => {
+        btn.addEventListener("click", () => openClosureModal(btn.dataset.id));
+      });
+
+      // ── Due date inline edit ───────────────────────────────────────────────
+      list.querySelectorAll(".ma-due-edit-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.dataset.id;
+          btn.style.display = "none";
+          document.getElementById(`due-text-${id}`).style.display = "none";
+          document.getElementById(`due-form-${id}`).style.display = "inline-flex";
+        });
+      });
+
+      list.querySelectorAll(".ma-due-cancel-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.dataset.id;
+          document.getElementById(`due-form-${id}`).style.display = "none";
+          document.getElementById(`due-text-${id}`).style.display = "";
+          list.querySelector(`.ma-due-edit-btn[data-id="${id}"]`).style.display = "";
+        });
+      });
+
+      list.querySelectorAll(".ma-due-save-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id      = btn.dataset.id;
+          const newDate = document.getElementById(`due-input-${id}`).value;
+          if (!newDate) {
+            document.getElementById(`due-input-${id}`).style.borderColor = "#ef4444";
+            return;
+          }
+          await updateDueDate(id, newDate);
+        });
+      });
+    }
+
+    // ── UPDATE DUE DATE ───────────────────────────────────────────────────────
+    async function updateDueDate(id, newDate) {
+      showLoading("Mise à jour de la date…");
+      try {
+        await updateCorrectiveActionStatus(id, { due_date: newDate });
+        const a = allActions.find(x => x.id === id);
+        if (a) a.due_date = newDate;
+        renderStats();
+        renderList();
+      } catch (e) {
+        alert("Erreur : " + e.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    // ── IN PROGRESS ──────────────────────────────────────────────────────────
+    async function markInProgress(id) {
+      showLoading("Mise à jour…");
+      try {
+        await updateCorrectiveActionStatus(id, { status: "In Progress" });
+        const a = allActions.find(x => x.id === id);
+        if (a) a.status = "In Progress";
+        renderStats();
+        renderList();
+      } catch (e) {
+        alert("Erreur : " + e.message);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    // ── CLOSURE MODAL ─────────────────────────────────────────────────────────
+    let pendingClosureFile = null;
+
+    function openClosureModal(id) {
+      pendingClosureId   = id;
+      pendingClosureFile = null;
+      document.getElementById("closure-date").value      = new Date().toISOString().slice(0, 10);
+      document.getElementById("closure-plan").value      = "";
+      document.getElementById("closure-image-input").value = "";
+      document.getElementById("closure-upload-text").textContent = "Cliquez pour choisir une image";
+      document.getElementById("closure-image-preview-wrap").style.display = "none";
+      document.getElementById("closure-image-preview").src = "";
+      document.getElementById("closure-modal-error").style.display = "none";
+      document.getElementById("closure-modal").style.display = "flex";
+    }
+
+    function closeClosureModal() {
+      document.getElementById("closure-modal").style.display = "none";
+      pendingClosureId   = null;
+      pendingClosureFile = null;
+    }
+
+    // Image selection via click on upload zone
+    document.getElementById("closure-upload-zone").addEventListener("click", () => {
+      document.getElementById("closure-image-input").click();
+    });
+
+    document.getElementById("closure-image-input").addEventListener("change", e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      pendingClosureFile = file;
+      document.getElementById("closure-upload-text").textContent = file.name;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        document.getElementById("closure-image-preview").src = ev.target.result;
+        document.getElementById("closure-image-preview-wrap").style.display = "flex";
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById("closure-image-remove").addEventListener("click", e => {
+      e.stopPropagation();
+      pendingClosureFile = null;
+      document.getElementById("closure-image-input").value = "";
+      document.getElementById("closure-upload-text").textContent = "Cliquez pour choisir une image";
+      document.getElementById("closure-image-preview-wrap").style.display = "none";
+      document.getElementById("closure-image-preview").src = "";
+    });
+
+    document.getElementById("close-closure-modal").addEventListener("click", closeClosureModal);
+    document.getElementById("close-closure-modal-2").addEventListener("click", closeClosureModal);
+    document.getElementById("closure-modal").addEventListener("click", e => {
+      if (e.target.id === "closure-modal") closeClosureModal();
+    });
+
+    document.getElementById("closure-confirm-btn").addEventListener("click", async () => {
+      const dateVal  = document.getElementById("closure-date").value;
+      const planVal  = document.getElementById("closure-plan").value.trim();
+      const errEl    = document.getElementById("closure-modal-error");
+
+      if (!dateVal) {
+        errEl.textContent = "La date de clôture est obligatoire.";
+        errEl.style.display = "block";
+        return;
+      }
+      if (!planVal) {
+        errEl.textContent = "Le plan d'action est obligatoire.";
+        errEl.style.display = "block";
+        return;
+      }
+      if (!pendingClosureFile) {
+        errEl.textContent = "Une image (preuve) est obligatoire.";
+        errEl.style.display = "block";
+        return;
+      }
+      errEl.style.display = "none";
+
+      const btn = document.getElementById("closure-confirm-btn");
+      btn.disabled = true;
+      btn.textContent = "⏳ Clôture en cours…";
+      showLoading("Téléchargement de la preuve…");
+
+      try {
+        const imageUrl = await uploadClosureEvidence(pendingClosureFile);
+
+        showLoading("Clôture de l'action…");
+        await updateCorrectiveActionStatus(pendingClosureId, {
+          status:            "Closed",
+          date_closed:       dateVal,
+          closed_by:         username,
+          closure_comment:   planVal,
+          closure_image_url: imageUrl,
+        });
+
+        const a = allActions.find(x => x.id === pendingClosureId);
+        if (a) {
+          a.status            = "Closed";
+          a.date_closed       = dateVal;
+          a.closed_by         = username;
+          a.closure_comment   = planVal;
+          a.closure_image_url = imageUrl;
+        }
+
+        // Notifier le créateur de l'action que celle-ci a été clôturée
+        if (a?.created_by) {
+          try {
+            const { data: { session: sess } } = await supabase.auth.getSession();
+            const token = sess?.access_token || SUPABASE_ANON_KEY;
+            await fetch(`${SUPABASE_URL}/functions/v1/notify-ca`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                cloturee:        true,
+                responsable:     username,
+                created_by:      a.created_by,
+                action_required: a.action_required  || null,
+                due_date:        a.due_date          || null,
+                zone:            a.zone              || null,
+                audit_name:      a.audit_name        || null,
+                question:        a.question          || null,
+              }),
+            });
+          } catch (notifErr) {
+            console.error("[notify-ca closure]", notifErr);
+          }
+        }
+
+        closeClosureModal();
+        renderStats();
+        renderList();
+      } catch (e) {
+        errEl.textContent = "Erreur : " + (e.message || e);
+        errEl.style.display = "block";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "✅ Confirmer la clôture";
+        hideLoading();
+      }
+    });
+
+    // ── REFRESH ──────────────────────────────────────────────────────────────
+    document.getElementById("ma-refresh-btn").addEventListener("click", loadActions);
+
+    // ── REPORTS ──────────────────────────────────────────────────────────────
+
+    function buildReportRows(actions) {
+      return actions.map(a => {
+        const eff     = computeEffectiveStatus(a.status, a.due_date);
+        const dueStr  = a.due_date     ? new Date(a.due_date).toLocaleDateString("fr-FR") : "—";
+        const createdStr = a.date_created ? new Date(a.date_created).toLocaleDateString("fr-FR") : "—";
+        const closedStr  = a.date_closed  ? new Date(a.date_closed).toLocaleDateString("fr-FR")  : "—";
+        const delay = (() => {
+          if (!a.date_closed || !a.due_date) return "—";
+          const d = Math.round((new Date(a.date_closed) - new Date(a.due_date)) / 86400000);
+          return d > 0 ? "+" + d + " j retard" : d === 0 ? "Dans délais" : Math.abs(d) + " j avance";
+        })();
+        return {
+          audit:       a.audit_name || "—",
+          zone:        [a.zone, a.sous_zone].filter(Boolean).join(" › ") || "—",
+          question:    a.question,
+          responsable: a.responsable,
+          action:      a.action_required,
+          priority:    a.priority,
+          status:      eff,
+          dueDate:     dueStr,
+          closedDate:  closedStr,
+          delay,
+          comment:     a.closure_comment || "—",
+        };
+      });
+    }
+
+    async function urlToBase64(url) {
+      try {
+        const resp = await fetch(url);
+        const blob = await resp.blob();
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return null;
+      }
+    }
+
+    async function generatePDFReport(actions, title) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+      // Collect all image URLs per row and pre-load them as base64
+      const rowImages = actions.map(a => {
+        const key = `${a.session_id}|${a.rubrique || ""}|${a.question}`;
+        return [
+          ...(auditImagesMap.get(key) || []),
+          ...(a.closure_image_url ? [a.closure_image_url] : []),
+        ];
+      });
+      const imageCache = new Map();
+      await Promise.all(
+        [...new Set(rowImages.flat())].map(async url => {
+          const b64 = await urlToBase64(url);
+          if (b64) imageCache.set(url, b64);
+        })
+      );
+
+      doc.setFontSize(16);
+      doc.setTextColor(30, 41, 59);
+      doc.text(title, 14, 18);
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Généré le " + new Date().toLocaleDateString("fr-FR"), 14, 26);
+
+      const IMG_W     = 14;
+      const IMG_H     = 14;
+      const IMG_GAP   = 2;
+      const MAX_IMG   = 3;
+      const IMG_COL_W = MAX_IMG * (IMG_W + IMG_GAP) - IMG_GAP + 4; // 50 mm
+
+      const rows = buildReportRows(actions);
+
+      doc.autoTable({
+        startY: 32,
+        head: [["Audit", "Zone", "Question", "Responsable", "Action", "Priorité", "Statut", "Échéance", "Clôture", "Délai", "Commentaire", "Images"]],
+        body: actions.map((a, i) => {
+          const r    = rows[i];
+          const imgs = rowImages[i];
+          return [
+            r.audit, r.zone, r.question, r.responsable, r.action,
+            r.priority, r.status, r.dueDate, r.closedDate, r.delay, r.comment,
+            { content: "", styles: imgs.length > 0 ? { minCellHeight: IMG_H + 2 } : {} },
+          ];
+        }),
+        headStyles: { fillColor: [16, 185, 129], fontSize: 7, textColor: 255, fontStyle: "bold" },
+        bodyStyles: { fontSize: 7 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          2:  { cellWidth: 30 },
+          4:  { cellWidth: 30 },
+          10: { cellWidth: 20 },
+          11: { cellWidth: IMG_COL_W },
+        },
+        didDrawCell: (data) => {
+          if (data.section !== "body") return;
+          if (data.column.index === 6) {
+            const cfg = getStatusCfg(data.cell.raw);
+            const [r, g, b] = hexToRgb(cfg.color);
+            doc.setTextColor(r, g, b);
+          }
+          if (data.column.index === 11) {
+            const imgs = rowImages[data.row.index];
+            if (!imgs || !imgs.length) return;
+            const x0 = data.cell.x + 1;
+            const y0 = data.cell.y + 1;
+            imgs.slice(0, MAX_IMG).forEach((url, idx) => {
+              const b64 = imageCache.get(url);
+              if (b64) doc.addImage(b64, "JPEG", x0 + idx * (IMG_W + IMG_GAP), y0, IMG_W, IMG_H);
+            });
+          }
+        },
+      });
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      doc.save(`Actions_Correctives_${title.replace(/\s+/g, "-")}_${stamp}.pdf`);
+    }
+
+    function hexToRgb(hex) {
+      const r = parseInt(hex.slice(1,3),16);
+      const g = parseInt(hex.slice(3,5),16);
+      const b = parseInt(hex.slice(5,7),16);
+      return [r,g,b];
+    }
+
+    function generateExcelReport(actions, filename) {
+      const rows = buildReportRows(actions);
+      const ws = XLSX.utils.json_to_sheet(rows.map(r => ({
+        "Audit":        r.audit,
+        "Zone":         r.zone,
+        "Question":     r.question,
+        "Responsable":  r.responsable,
+        "Action":       r.action,
+        "Priorité":     r.priority,
+        "Statut":       r.status,
+        "Date limite":  r.dueDate,
+        "Date clôture": r.closedDate,
+        "Délai":        r.delay,
+        "Commentaire":  r.comment,
+      })));
+      ws["!cols"] = [14,18,36,16,36,10,12,12,12,14,30].map(w => ({ wch: w }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Actions");
+      XLSX.writeFile(wb, filename + "_" + new Date().toISOString().slice(0,10) + ".xlsx");
+    }
+
+    async function triggerPdfReport(filterFn, emptyMsg, title, btnId) {
+      const filtered = allActions.filter(filterFn);
+      if (!filtered.length) { alert(emptyMsg); return; }
+      const btn = document.getElementById(btnId);
+      const origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "⏳ Génération…";
+      try {
+        await generatePDFReport(filtered, title);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+      }
+    }
+
+    document.getElementById("ma-pdf-open-btn").addEventListener("click", () => {
+      triggerPdfReport(
+        a => computeEffectiveStatus(a.status, a.due_date) !== "Closed",
+        "Aucune action ouverte.",
+        "Actions Ouvertes",
+        "ma-pdf-open-btn"
+      );
+    });
+
+    document.getElementById("ma-pdf-closed-btn").addEventListener("click", () => {
+      triggerPdfReport(
+        a => a.status === "Closed",
+        "Aucune action clôturée.",
+        "Actions Clôturées",
+        "ma-pdf-closed-btn"
+      );
+    });
+
+    document.getElementById("ma-xls-btn").addEventListener("click", () => {
+      if (!allActions.length) { alert("Aucune action."); return; }
+      generateExcelReport(allActions, "Actions_Correctives");
+    });
+
+    // ── INIT ─────────────────────────────────────────────────────────────────
+    setActiveView(activeView);
+  </script>
+</body>
+</html>

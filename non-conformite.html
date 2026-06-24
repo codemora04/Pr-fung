@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signalement Non-conformité</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" href="logo4.png">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Formulaire de signalement d'une non-conformité qualité">
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<script src="./pwa.js"></script>
+
+<body class="page-nc">
+
+  <!-- Auth loading overlay -->
+  <div id="auth-overlay" style="position:fixed;inset:0;background:#f0f4ff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px;">
+    <div style="width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+    <p style="color:#64748b;font-family:Inter,sans-serif;font-size:0.9rem;margin:0;">Vérification en cours…</p>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+  <!-- Back -->
+  <a href="landing.html" class="back-btn" id="back-landing" aria-label="Retour à l'accueil" style="display:none;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 12H5M12 19l-7-7 7-7"/>
+    </svg>
+    Retour
+  </a>
+
+  <!-- Card -->
+  <div class="nc-card" id="nc-card-main" style="display:none;">
+
+    <!-- Header -->
+    <div class="nc-header">
+      <div class="nc-icon" aria-hidden="true">⚠️</div>
+      <h1 class="nc-title">Non-conformité</h1>
+      <p class="nc-subtitle">Remplissez le formulaire pour enregistrer un signalement</p>
+    </div>
+
+    <!-- Form -->
+    <form class="nc-form" id="ncForm" novalidate>
+
+      <!-- Description non-conformité -->
+      <div class="field-group">
+        <label class="field-label" for="nc-description">
+          Description de la non-conformité <span class="field-required">*</span>
+        </label>
+        <textarea
+          id="nc-description"
+          class="nc-textarea"
+          name="description"
+          placeholder="Décrivez la non-conformité observée…"
+          required
+          maxlength="1000"
+        ></textarea>
+        <div class="nc-error" id="err-description">Ce champ est obligatoire.</div>
+      </div>
+      <!--Actions-->
+      <div class="field-group">
+        <label class="field-label" for="nc-action">
+          Action 
+        </label>
+        <input
+        type="text"
+        id="nc-action"
+        class="nc-input"
+        name="action"
+        placeholder="Décrire l'action"
+        required
+        maxlength="100"
+        >
+        <div class="nc-error" id="err-action">Ce champ est obligatoire.</div>
+      </div>
+
+      <!-- Responsable -->
+      <div class="field-group">
+        <label class="field-label">
+          Responsable <span class="field-required">*</span>
+        </label>
+        <div id="nc-responsable-wrap"></div>
+        <div class="nc-error" id="err-responsable">Veuillez choisir au moins un responsable.</div>
+      </div>
+
+      <!-- Délai -->
+      <div class="field-group">
+        <label class="field-label" for="nc-delai">
+          réalisation de l'action <span class="field-required">*</span>
+        </label>
+        <input
+          type="date"
+          id="nc-delai"
+          class="nc-input"
+          name="delai"
+          required
+        >
+        <div class="nc-error" id="err-delai">Veuillez sélectionner une date.</div>
+      </div>
+
+      <!-- Photo -->
+      <div class="field-group">
+        <label class="field-label">Photos (optionnel)</label>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="nc-image" name="image" accept="image/*" multiple>
+          <div class="upload-icon">📷</div>
+          <div class="upload-text">
+            <strong>Cliquez</strong> ou glissez des images ici
+          </div>
+          <div class="upload-hint">JPG, PNG, WEBP — max 5 Mo par image</div>
+        </div>
+        <div class="images-preview-grid" id="imagesGrid"></div>
+        <div class="nc-error" id="err-image"></div>
+      </div>
+
+      <!-- Submit -->
+      <button type="submit" class="nc-submit" id="nc-submit-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Enregistrer le signalement
+      </button>
+
+    </form>
+
+    <!-- Success -->
+    <div class="nc-success" id="ncSuccess" role="alert" aria-live="polite">
+      <div class="success-icon" aria-hidden="true">✅</div>
+      <div class="success-title">Signalement enregistré !</div>
+      <div class="success-text" id="nc-success-text">
+        La non-conformité a bien été soumise.
+      </div>
+      <button class="btn-new" id="btn-new-nc" type="button">
+        Ajouter un autre signalement
+      </button>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase.js';
+    import { loadResponsables, buildMultiSelect } from './corrective-actions.js';
+
+    // Auth guard — rôles autorisés : responsable, auditeur, autre
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      window.location.href = 'login.html?redirect=non-conformite.html';
+    } else {
+      const email = sessionData.session.user.email;
+      const { data: userData } = await supabase
+        .from('authorized_users')
+        .select('username, role')
+        .ilike('email', email)
+        .maybeSingle();
+
+      const role = userData?.role;
+      const ALLOWED_ROLES = ['responsable', 'auditeur', 'autre'];
+
+      if (!userData || !ALLOWED_ROLES.includes(role)) {
+        window.location.href = 'landing.html';
+      } else {
+        localStorage.setItem('username', userData.username);
+        sessionStorage.setItem('audit_username', userData.username);
+        sessionStorage.setItem('audit_user_role', role);
+
+        document.getElementById('auth-overlay').style.display = 'none';
+        document.getElementById('back-landing').style.display = '';
+        document.getElementById('nc-card-main').style.display = '';
+      }
+    }
+
+    const form        = document.getElementById('ncForm');
+    const successEl   = document.getElementById('ncSuccess');
+    const successTxt  = document.getElementById('nc-success-text');
+    const btnNew      = document.getElementById('btn-new-nc');
+    const submitBtn   = document.getElementById('nc-submit-btn');
+    const uploadZone  = document.getElementById('uploadZone');
+    const fileInput   = document.getElementById('nc-image');
+    const imagesGrid  = document.getElementById('imagesGrid');
+    const errImage    = document.getElementById('err-image');
+
+    let imageFiles = [];
+
+    // Build multi-select for responsable
+    const msResp = buildMultiSelect([]);
+    document.getElementById('nc-responsable-wrap').appendChild(msResp);
+    loadResponsables().then(names => msResp.populate(names));
+
+    // Set min date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('nc-delai').setAttribute('min', today);
+
+    // Field validation helper
+    function validateField(id, errId) {
+      const val = document.getElementById(id).value.trim();
+      const err = document.getElementById(errId);
+      if (!val) { err.classList.add('show'); return false; }
+      err.classList.remove('show');
+      return true;
+    }
+
+    // Clear errors on input/change
+    ['nc-description','nc-delai'].forEach(id => {
+      document.getElementById(id).addEventListener('input', () => {
+        document.getElementById('err-' + id.replace('nc-','')).classList.remove('show');
+      });
+    });
+    msResp.querySelector('.ms-trigger').addEventListener('click', () => {
+      document.getElementById('err-responsable').classList.remove('show');
+    });
+
+    // Image handling
+    function renderPreviews() {
+      imagesGrid.innerHTML = '';
+      imageFiles.forEach((file, idx) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const thumb = document.createElement('div');
+          thumb.className = 'image-thumb';
+          thumb.innerHTML = `
+            <img src="${ev.target.result}" alt="Aperçu ${idx + 1}">
+            <button type="button" class="btn-remove-img" aria-label="Supprimer l'image" data-idx="${idx}">✕</button>
+          `;
+          thumb.querySelector('.btn-remove-img').addEventListener('click', () => {
+            imageFiles.splice(idx, 1);
+            renderPreviews();
+          });
+          imagesGrid.appendChild(thumb);
+        };
+        reader.readAsDataURL(file);
+      });
+      imagesGrid.classList.toggle('show', imageFiles.length > 0);
+    }
+
+    function addImages(files) {
+      errImage.classList.remove('show');
+      const errors = [];
+      Array.from(files).forEach(file => {
+        if (!file.type.startsWith('image/')) {
+          errors.push(`"${file.name}" n'est pas une image.`);
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          errors.push(`"${file.name}" dépasse 5 Mo.`);
+          return;
+        }
+        imageFiles.push(file);
+      });
+      if (errors.length) {
+        errImage.textContent = errors.join(' ');
+        errImage.classList.add('show');
+      }
+      renderPreviews();
+    }
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) addImages(fileInput.files);
+      fileInput.value = '';
+    });
+
+    uploadZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadZone.classList.add('drag-over');
+    });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) addImages(e.dataTransfer.files);
+    });
+
+    function resetSubmitBtn() {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> Enregistrer le signalement`;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const ok1 = validateField('nc-description', 'err-description');
+      const ok3 = validateField('nc-delai',       'err-delai');
+      const responsables = msResp.getValues();
+      const responsable  = msResp.getValue();  // comma-separated for DB
+      if (!responsables.length) {
+        document.getElementById('err-responsable').classList.add('show');
+      }
+      if (!ok1 || !responsables.length || !ok3) return;
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '⏳ Enregistrement…';
+
+      const description = document.getElementById('nc-description').value.trim();
+      const delai        = document.getElementById('nc-delai').value;
+
+      // Upload images to Supabase Storage if provided
+      let imageUrl = null;
+      if (imageFiles.length > 0) {
+        const urls = [];
+        for (const file of imageFiles) {
+          const ext  = file.name.split('.').pop();
+          const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from('nc-images')
+            .upload(path, file, { contentType: file.type });
+          if (uploadError) {
+            errImage.textContent = "Erreur lors de l'upload d'une image.";
+            errImage.classList.add('show');
+            resetSubmitBtn();
+            return;
+          }
+          const { data: urlData } = supabase.storage.from('nc-images').getPublicUrl(path);
+          urls.push(urlData.publicUrl);
+        }
+        imageUrl = JSON.stringify(urls);
+      }
+
+      // Insert into Supabase
+      const { error } = await supabase.from('non_conformites').insert({
+        description,
+        responsable,
+        delai,
+        image_url: imageUrl,
+      });
+
+      if (error) {
+        errImage.textContent = "Erreur lors de l'enregistrement. Réessayez.";
+        errImage.classList.add('show');
+        resetSubmitBtn();
+        return;
+      }
+
+      // Notification email à chaque responsable
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || SUPABASE_ANON_KEY;
+        for (const resp of responsables) {
+          try {
+            const r = await fetch(`${SUPABASE_URL}/functions/v1/notify-ca`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                responsable:     resp,
+                action_required: document.getElementById('nc-action').value.trim(),
+                due_date:        delai,
+                priority:        "High",
+                audit_name:      "Non-conformité",
+                question:        description,
+                created_by:      localStorage.getItem('username') || null,
+              }),
+            });
+            const notifData = await r.json();
+            console.log(`[notify-ca] ${resp}:`, notifData);
+          } catch (e) {
+            console.error(`[notify-ca] ${resp} — Erreur:`, e);
+          }
+        }
+      } catch (e) {
+        console.error("[notify-ca] Erreur session:", e);
+      }
+
+      const dateFr = new Date(delai).toLocaleDateString('fr-FR', {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+      successTxt.textContent = `Responsable(s) : ${responsable} — Délai : ${dateFr}`;
+      form.classList.add('hidden');
+      successEl.classList.add('show');
+      resetSubmitBtn();
+    });
+
+    btnNew.addEventListener('click', () => {
+      imageFiles = [];
+      fileInput.value = '';
+      imagesGrid.innerHTML = '';
+      imagesGrid.classList.remove('show');
+      errImage.classList.remove('show');
+      msResp.reset();
+      form.reset();
+      form.classList.remove('hidden');
+      successEl.classList.remove('show');
+    });
+  </script>
+
+</body>
+</html>
